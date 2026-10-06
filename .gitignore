@@ -1,3 +1,6 @@
 hshop_downloader.log
 *.cia
 *.part
+__pycache__/
+.venv/
+downloads/

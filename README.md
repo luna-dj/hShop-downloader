@@ -22,7 +22,7 @@ The **hShop Downloader** is a Python script designed to facilitate the downloadi
 
 1. **Web Scraping:** The script utilizes the `requests` library along with `BeautifulSoup` for web scraping. It extracts relevant information, such as download links and file names, from the hShop website.
 
-2. **Selenium for Dynamic Content:** For web pages that load content dynamically using JavaScript, the script utilizes Selenium to interact with the webpage and retrieve the necessary data.
+2. **Camoufox Stealth Browser:** The script drives [Camoufox](https://camoufox.com), a hardened, anti-fingerprinting Firefox build, to load pages and automatically clear Cloudflare / "verify you are human" captcha challenges that block traditional automation tools such as Selenium.
 
 3. **Threaded Downloads:** To enhance performance, the script uses multiple threads to download games concurrently. This allows for faster retrieval of content.
 
@@ -39,10 +39,19 @@ python hshop_downloader.py --speed-limit 1048576  # Sets speed limit to 1 MB/s
 ```
 The speed-limit argument can be omitted to use the full speed of your connection.
 
+8. **Custom Output Directory:** By default, downloads are saved into `./downloads` (organized into category/subcategory folders). Use `--output-dir` to save elsewhere:
+```
+python hshop_downloader.py --output-dir ~/Games/hShop      # Absolute or ~ path
+python hshop_downloader.py -o "/Volumes/External/hShop"    # Short form, paths with spaces
+```
+The directory (including category subfolders) is created automatically if it does not exist.
+
 
 #### Technical Details
 - **Web Scraping:** The script sends HTTP requests to the hShop website and parses the HTML response using BeautifulSoup. It then extracts relevant information such as download links and file names using regular expressions.
-- **Selenium Integration:** For web pages with content that loads dynamically via JavaScript, the script uses Selenium, a powerful browser automation tool, to navigate the site, interact with elements, and extract data. Selenium simulates a real user interacting with the browser, making it ideal for scraping content that isn’t immediately available in the initial HTML response.
+- **Camoufox Integration:** The script uses Camoufox, a stealth browser built on a custom Firefox build, to navigate the site and retrieve pages. Camoufox spoofs a realistic device fingerprint (OS, fonts, WebGL, screen size, ...) and humanizes cursor movement, so Cloudflare's bot detection / captcha challenges are passed automatically instead of blocking the scraper.
+- **Shared Cloudflare Clearance:** Cookies acquired by the browser (most importantly Cloudflare's `cf_clearance`) plus the spoofed user agent are copied into the `requests` session used for downloads, so direct download links are not challenged either. If a download is still blocked, the clearance is refreshed from the browser and the request is retried once.
+- **Captcha-Aware Navigation:** Every page load is checked for a Cloudflare interstitial, and title pages hide their QR code / download link behind a Turnstile "security check". Camoufox solves both automatically; the script waits until the check clears and the download link is revealed before parsing the HTML (with a manual-solve fallback when running `--headed`).
 - **Threaded Downloads:** The script utilizes Python's ``threading`` module to create multiple threads for downloading games concurrently. This helps in maximizing bandwidth utilization and reducing download times, especially when downloading multiple files.
 - **HTML Decoding:** The ``html_decode`` function handles HTML-encoded characters in filenames by replacing percent-encoded characters with their corresponding ASCII characters. This ensures that filenames are correctly decoded and readable.
 - **Download Progress:** The script uses ``tqdm``, a Python library for creating progress bars, to display real-time download progress. This gives users visibility into the download process and estimated time remaining.
@@ -52,17 +61,19 @@ The speed-limit argument can be omitted to use the full speed of your connection
 
 Ensure you have the following dependencies installed:
 
-- Python 3
+- Python 3.10 or newer
+- `camoufox` (with the `geoip` extra) — includes the stealth Firefox browser and Playwright driver
 - `requests`
-- `BeautifulSoup`
+- `beautifulsoup4`
 - `tqdm`
-- `Selenium`
-- A WebDriver for your browser (e.g., `chromedriver` for Chrome)
 
 Install the required Python packages using:
 
 ```bash
 pip install -r requirements.txt
+
+# Download the Camoufox browser (only needed once, ~150 MB)
+python -m camoufox fetch
 ```
 
 ## Usage
@@ -79,11 +90,38 @@ Execute the script with the following command:
 ```bash
 python hshop_downloader.py
 ```
+If a captcha hangs (Cloudflare occasionally escalates to an interactive challenge), run with a visible browser window instead and solve it once manually:
+```bash
+python hshop_downloader.py --headed
+```
+The clearance cookie obtained this way is reused by the script for the rest of the session, including the downloads.
 4. **Follow the On-Screen Instructions:**
     - After running the script, you will be prompted to select the main categories from which you want to download games. Enter the numbers corresponding to your desired categories, separated by commas, or type `*` to select all.
     - Next, you will choose the subcategories of the games you want to download using a similar selection process.
     - The files will be downloaded and organized into directories based on the categories you selected.
+
+### Command-line options
+```
+python hshop_downloader.py [--speed-limit BYTES_PER_SECOND] [-o|--output-dir DIR] [--headed]
+```
+| Option | Description |
+| ------ | ----------- |
+| `--speed-limit BYTES` | Cap the download speed, e.g. `1048576` for 1 MB/s. |
+| `-o`, `--output-dir DIR` | Base directory for downloads (default: `./downloads`). Created automatically; `~` is expanded. |
+| `--headed` | Show the browser window so a captcha can be solved manually. |
     
+
+## Troubleshooting
+
+- **`Camoufox is not installed` / browser not found:** install the package and fetch the browser:
+  ```bash
+  pip install -U "camoufox[geoip]"
+  python -m camoufox fetch
+  ```
+- **Stuck on a "Verify you are human" / "Just a moment..." page:** the script already waits for the challenge to clear automatically. If it keeps failing, run with `--headed` and solve the challenge in the visible window; wait a few minutes between attempts, as repeatedly hitting the challenge can raise the site's suspicion level.
+- **Downloads return an HTML page instead of a file:** this is a Cloudflare block. The script automatically refreshes the browser clearance and retries once; if it persists, use `--headed` so the challenge can be cleared interactively.
+- **GeoIP warnings:** `geoip` is optional. If the extra is unavailable the script logs a warning and continues with automatic (non-geolocated) fingerprinting.
+
 
 ## Additional Functionality
 The script can be extended and enhanced in several ways:

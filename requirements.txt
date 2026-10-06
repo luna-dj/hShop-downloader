@@ -1,5 +1,4 @@
-requests
+camoufox[geoip]
 beautifulsoup4
+requests
 tqdm
-selenium
-webdriver-manager
